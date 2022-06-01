@@ -1,3 +1,4 @@
+from genericpath import exists
 import tkinter as tk
 import numpy as np
 from turtle import width
@@ -7,53 +8,54 @@ from tkinter import *
 import cv2
 from PIL import Image, ImageTk, ImageDraw
 from tkinter import messagebox
+import MainWindow
 
 class SourceImgWindow:
-    _instance = None
     @staticmethod
-    def get_instance():
-        if SourceImgWindow._instance is None:
-            SourceImgWindow()
-        return SourceImgWindow._instance
+    def get_instance( img, mainWindowInstance ):
+        return SourceImgWindow( img, mainWindowInstance )
 
-    def __init__( self ):
-        if SourceImgWindow._instance is not None:
-            raise Exception('only one instance can exist')
-        else:
-            SourceImgWindow._instance = self
-            self.window = tk.Tk()
-            self.window.title('SourceImgEditor')
-            self.window.bind('<Button-3>', self.ClickAddVertex )
-            self.window.bind('<Button-2>', self.ClickDeleteVertex )
-            self.window.bind('<Button-1>', self.ClickDrawLine )
-            self.boundaryVertex = list()
+    def __init__( self , img , mainWindowInstance ):
+        self.mainWindowInstance = mainWindowInstance
+        self.window = tk.Toplevel()
+        self.window.title('SourceImgEditor')
 
-    def OpenImage(self):
-        self.window.withdraw()
-        filePath = filedialog.askopenfilename(
-            filetypes =
-                [
-                    ('imgae files',('.png', '.jpg'))
-                ]
-            )
-        self.imgPath = filePath
-        self.originImg = Image.open( self.imgPath )
-        self.modifiedImg = self.originImg.copy()
+        self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.window.bind('<Button-3>', self.ClickAddVertex )
+        self.window.bind('<Button-2>', self.ClickDeleteVertex )
+        self.window.bind('<Button-1>', self.ClickDrawLine )
+        self.boundaryVertex = list()
+
+        self.originImg = img
+        self.modifiedImg = img.copy()
+        self.cropImg = None
+
         self.draw = ImageDraw.Draw( self.modifiedImg )
         self.SetImg()
 
-    def SetImg(self):
+        self.CreateButton()
+
+    def on_closing(self):
+        self.window.destroy()
+
+    def CreateButton(self):
+        self.cropButton = tk.Button( self.window, command = self.CropImg , text='Crop', bg='blue', fg='white', font=('Arial', 12) ).grid(row = 1, column = 0)
+        self.doneButton =  tk.Button( self.window, command = self.DoneFunc , text='Done', bg='red', fg='white', font=('Arial', 12) ).grid(row = 2, column = 0)
+
+    def SetImg( self ):
         self.imgTK = ImageTk.PhotoImage( self.modifiedImg )
         self.label = tk.Label( self.window, image = self.imgTK )
         self.label.image = self.imgTK
         self.label.grid( column = 0, row = 0 )
-        self.window.geometry( str(self.originImg.width) + 'x' + str(self.originImg.height) )
+
+        width = self.originImg.width
+        height = self.originImg.height + 64
+        self.window.geometry( str(width) + 'x' + str(height) )
 
     def RefreshImg(self):
         self.imgTK = ImageTk.PhotoImage( self.originImg )
         self.label = tk.Label( self.window, image = self.imgTK )
         self.label.image = self.imgTK
-        self.label.grid( column = 0, row = 0 )
         self.window.geometry( str(self.originImg.width) + 'x' + str(self.originImg.height) )
 
     def MainLoop(self):
@@ -118,6 +120,12 @@ class SourceImgWindow:
             cv2.imshow( 'cropImg' , self.cropImg )
             cv2.waitKey(0)
 
+    def DoneFunc( self ):
+        print('done')
+        if self.cropImg is not None:
+            self.mainWindowInstance.UpdateSourceImg( self.cropImg )
+            self.window.destroy()
+    
     # callback
     def ClickAddVertex(self, event ):
         self.PushBoundaryVertex( event.x , event.y )
@@ -127,8 +135,9 @@ class SourceImgWindow:
 
     def ClickDrawLine( self, evevt ):
         self.DrawLine()
-        self.CropImg()
 
-def init():
-    sourceImgWindow = SourceImgWindow()
+def GetInstance( img, mainWindowInstance ):
+    sourceImgWindow = SourceImgWindow.get_instance( img, mainWindowInstance )
+    sourceImgWindow.window.withdraw()
     return sourceImgWindow
+
