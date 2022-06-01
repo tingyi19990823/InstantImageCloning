@@ -1,6 +1,6 @@
 import tkinter as tk
 from PIL import Image, ImageTk, ImageDraw
-import SourceImg
+import SourceWindow, TargetWindow
 from tkinter import filedialog
 
 window = None
@@ -32,8 +32,7 @@ class MainWindow:
             self.SetImg( 'result', self.resultImg )
 
             self.sourceWindow = None
-            self.targetWindow = None
-            self.resultWindow = None
+            self.targetWindow = TargetWindow.init( MainWindow._instance )
             
     def MainLoop(self):
         self.window.mainloop()
@@ -77,7 +76,7 @@ class MainWindow:
     def SourceClick( self ):
         print('source button clicked')
         self.sourceImg = self.OpenImage()
-        self.sourceWindow = SourceImg.GetInstance( self.sourceImg, MainWindow._instance )
+        self.sourceWindow = SourceWindow.GetInstance( self.sourceImg, MainWindow._instance )
         self.sourceWindow.MainLoop()
 
     def UpdateSourceImg( self , img ):
@@ -87,6 +86,12 @@ class MainWindow:
 
     def TargetClick( self ):
         print('target button clicked')
+        self.targetImg = self.OpenImage()
+        self.targetWindow.SetImg( self.targetImg )
+        self.targetWindow.UpdateImg()
+        self.targetWindow.deiconify()
+        self.targetWindow.mainloop()
+        
     
     def BlendingClick( self ):
         print('Blending button clicked')

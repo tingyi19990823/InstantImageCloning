@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-import SourceImg
+import SourceWindow
 import MainWindow
 
 if __name__=='__main__':

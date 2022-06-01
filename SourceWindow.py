@@ -86,7 +86,7 @@ class SourceImgWindow:
             originPixels = self.originImg.load()
             for i in range( x-5, x+5 ):
                 for j in range( y-5, y+5):
-                    if( x >= 0 and x < self.originImg.width and y >= 0 and y< self.originImg.height ):
+                    if( i >= 0 and i < self.originImg.width and j >= 0 and j < self.originImg.height ):
                         pixels[i,j] = originPixels[i,j]
             self.DrawLine()
 
@@ -125,6 +125,8 @@ class SourceImgWindow:
         if self.cropImg is not None:
             self.mainWindowInstance.UpdateSourceImg( self.cropImg )
             self.window.destroy()
+        else:
+            messagebox.showinfo( 'Hint','請先Crop一張圖片再按Done')
     
     # callback
     def ClickAddVertex(self, event ):
