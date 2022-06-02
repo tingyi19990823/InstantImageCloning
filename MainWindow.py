@@ -1,7 +1,9 @@
 import tkinter as tk
 from PIL import Image, ImageTk, ImageDraw
-import SourceWindow, TargetWindow
+import SourceWindow, TargetWindow, MeanValueSeamlessCloning
 from tkinter import filedialog
+from tkinter import messagebox
+
 
 window = None
 
@@ -23,15 +25,24 @@ class MainWindow:
             self.window.geometry( '600x500' )
 
             self.sourceImg = Image.open( 'source.png' )
+            self.sourceShow = self.sourceImg.copy()
+            self.sourcemask = None
+            self.sourceBoundaryVertex = list()
+
             self.targetImg = Image.open( 'target.png' )
+            self.targetShow = self.targetImg.copy()
+            self.centerCoord = None
+
             self.resultImg = Image.open( 'result.png' )
+            self.resultShow = self.resultImg.copy()
+
             self.CreateButton()
             
             self.SetImg( 'source', self.sourceImg )
             self.SetImg( 'target', self.targetImg)
             self.SetImg( 'result', self.resultImg )
 
-            self.sourceWindow = None
+            self.sourceWindow = SourceWindow.init( MainWindow._instance )
             self.targetWindow = TargetWindow.init( MainWindow._instance )
             
     def MainLoop(self):
@@ -39,22 +50,22 @@ class MainWindow:
 
     def SetImg( self, imgTarget, img ):
         if imgTarget == 'source':
-            self.sourceImg = img.resize((300, 200))
-            imgTK = ImageTk.PhotoImage( self.sourceImg )
+            self.sourceShow = img.resize((300, 200))
+            imgTK = ImageTk.PhotoImage( self.sourceShow )
             self.sourceLabel = tk.Label( self.window , width = 300, height = 200, image = imgTK )
             self.sourceLabel.image = imgTK
             self.sourceLabel.grid( row = 1 , column = 0 )
 
         elif imgTarget == 'target':
-            self.targetImg = img.resize((300, 200))
-            imgTK = ImageTk.PhotoImage( self.targetImg )
+            self.targetShow = img.resize((300, 200))
+            imgTK = ImageTk.PhotoImage( self.targetShow )
             self.targetLabel = tk.Label( self.window , width = 300, height = 200, image = imgTK )
             self.targetLabel.image = imgTK
             self.targetLabel.grid( row = 3 , column = 0 )
 
         elif imgTarget == 'result':
-            self.resultImg = img.resize((300, 200))
-            imgTK = ImageTk.PhotoImage( self.resultImg )
+            self.resultShow = img.resize((300, 200))
+            imgTK = ImageTk.PhotoImage( self.resultShow )
             self.resultLabel = tk.Label( self.window , width = 300, height = 200, image = imgTK )
             self.resultLabel.image = imgTK
             self.resultLabel.grid( row = 1 , column = 1 )
@@ -76,30 +87,44 @@ class MainWindow:
     def SourceClick( self ):
         print('source button clicked')
         self.sourceImg = self.OpenImage()
-        self.sourceWindow = SourceWindow.GetInstance( self.sourceImg, MainWindow._instance )
+        self.sourceShow = self.sourceImg.copy()
+        self.sourceWindow = SourceWindow.init( MainWindow._instance )
+        self.sourceWindow.SetImg( self.sourceImg )
+        self.sourceWindow.UpdateImg()
         self.sourceWindow.MainLoop()
 
-    def UpdateSourceImg( self , img ):
+    def UpdateSource( self , img , mask , boundaryVertex ):
         print('update source')
         img = Image.fromarray( img )
+        self.sourcemask = mask
+        self.sourceBoundaryVertex = boundaryVertex
         self.SetImg( 'source', img )
+
+    def UpdateTarget( self, img , centerCoord ):
+        img = Image.fromarray( img )
+        self.centerCoord = centerCoord
+        self.SetImg( 'target', img )
 
     def TargetClick( self ):
         print('target button clicked')
-        self.targetImg = self.OpenImage()
-        self.targetWindow.SetImg( self.targetImg )
-        self.targetWindow.UpdateImg()
-        self.targetWindow.deiconify()
-        self.targetWindow.mainloop()
-        
+        if self.sourcemask is not None:
+            self.targetImg = self.OpenImage()
+            self.targetShow = self.targetImg.copy()
+            self.targetWindow = TargetWindow.init( MainWindow._instance )
+            self.targetWindow.SetImg( self.targetImg )
+            self.targetWindow.SetBoundaryVertex( self.sourceBoundaryVertex )
+            self.targetWindow.UpdateImg()
+            self.targetWindow.MainLoop()
+        else:
+            messagebox.showinfo( 'Hint','請先Crop Source Image後再處理 Target Image')
     
     def BlendingClick( self ):
         print('Blending button clicked')
+        print(self.sourceBoundaryVertex)
+        MeanValueSeamlessCloning.Start( self.sourceImg ,  self.sourcemask , self.sourceBoundaryVertex , self.targetImg , self.centerCoord )
 
     def SaveClick( self ):
         print('Save button clicked')
-    
-    
 
     def OpenImage(self):
         filePath = filedialog.askopenfilename(

@@ -1,3 +1,4 @@
+from decimal import localcontext
 from genericpath import exists
 import tkinter as tk
 import numpy as np
@@ -10,57 +11,52 @@ from PIL import Image, ImageTk, ImageDraw
 from tkinter import messagebox
 import MainWindow
 
-class SourceImgWindow:
-    @staticmethod
-    def get_instance( img, mainWindowInstance ):
-        return SourceImgWindow( img, mainWindowInstance )
-
-    def __init__( self , img , mainWindowInstance ):
+class SourceImgWindow( tk.Toplevel ):
+    def __init__( self , mainWindowInstance ):
+        super().__init__()
         self.mainWindowInstance = mainWindowInstance
-        self.window = tk.Toplevel()
-        self.window.title('SourceImgEditor')
+        self.title('SourceImgEditor')
 
-        self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
-        self.window.bind('<Button-3>', self.ClickAddVertex )
-        self.window.bind('<Button-2>', self.ClickDeleteVertex )
-        self.window.bind('<Button-1>', self.ClickDrawLine )
-        self.boundaryVertex = list()
-
-        self.originImg = img
-        self.modifiedImg = img.copy()
-        self.cropImg = None
-
-        self.draw = ImageDraw.Draw( self.modifiedImg )
-        self.SetImg()
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.bind('<Button-3>', self.ClickAddVertex )
+        self.bind('<Button-2>', self.ClickDeleteVertex )
+        
+        self.originImg = None
+        self.modifiedImg = None
+        self.draw = None
+        self.label = None
 
         self.CreateButton()
+        # 需要回傳給 MainWindow
+        self.cropImg = None
+        self.mask = None
+        self.boundaryVertex = list()
 
-    def on_closing(self):
-        self.window.destroy()
+    def on_closing( self ):
+        self.destroy()
 
     def CreateButton(self):
-        self.cropButton = tk.Button( self.window, command = self.CropImg , text='Crop', bg='blue', fg='white', font=('Arial', 12) ).grid(row = 1, column = 0)
-        self.doneButton =  tk.Button( self.window, command = self.DoneFunc , text='Done', bg='red', fg='white', font=('Arial', 12) ).grid(row = 2, column = 0)
+        self.cropButton = tk.Button( self, command = self.CropImg , text='Crop', bg='blue', fg='white', font=('Arial', 12) ).grid(row = 1, column = 0)
+        self.doneButton =  tk.Button( self, command = self.DoneFunc , text='Done', bg='red', fg='white', font=('Arial', 12) ).grid(row = 2, column = 0)
 
-    def SetImg( self ):
+    def SetImg( self , img ):
+        self.originImg = img
+        self.modifiedImg = img.copy()
+        self.draw = ImageDraw.Draw( self.modifiedImg )
+        width = img.width + 10
+        height = img.height + 64
+        my_geometry = str(width) + 'x' + str(height)
+        self.geometry( my_geometry )
+
+    def UpdateImg( self ):
         self.imgTK = ImageTk.PhotoImage( self.modifiedImg )
-        self.label = tk.Label( self.window, image = self.imgTK )
+        self.label = tk.Label( self, image = self.imgTK )
         self.label.image = self.imgTK
         self.label.grid( column = 0, row = 0 )
 
-        width = self.originImg.width
-        height = self.originImg.height + 64
-        self.window.geometry( str(width) + 'x' + str(height) )
-
-    def RefreshImg(self):
-        self.imgTK = ImageTk.PhotoImage( self.originImg )
-        self.label = tk.Label( self.window, image = self.imgTK )
-        self.label.image = self.imgTK
-        self.window.geometry( str(self.originImg.width) + 'x' + str(self.originImg.height) )
-
     def MainLoop(self):
-        self.window.deiconify()
-        self.window.mainloop()
+        self.deiconify()
+        self.mainloop()
 
     def ResetImg(self):
         self.modifiedImg = self.originImg.copy()
@@ -70,8 +66,10 @@ class SourceImgWindow:
         if( x >= 0 and x < self.originImg.width and y >= 0 and y< self.originImg.height ):
             self.boundaryVertex.append( (x,y) )
             print(self.boundaryVertex)
-            self.draw.ellipse( (x-3,y-3,x+3,y+3), fill = 'blue', outline = 'blue' )
-            self.SetImg()
+            self.draw.ellipse( (x-3,y-3,x+3,y+3), fill = 'blue', outline = 'white' )
+            if len( self.boundaryVertex ) > 1:
+                self.DrawLine()
+            self.UpdateImg()
         else:
             self.OutOfBoundWarning( x, y )
 
@@ -102,14 +100,14 @@ class SourceImgWindow:
             self.ResetImg()
             x , y = self.boundaryVertex[ 0 ]
             self.draw.ellipse( (x-3,y-3,x+3,y+3), fill = 'blue', outline = 'blue' )
-        self.SetImg()
+        self.UpdateImg()
 
     def CropImg( self ):
         # 超過三個點才做
         if len( self.boundaryVertex ) > 2:
             imgNumpy = np.asarray( self.originImg )
             mask_img = Image.new( '1', ( imgNumpy.shape[1] , imgNumpy.shape[0] ) , 0 )
-            ImageDraw.Draw( mask_img ).polygon( self.boundaryVertex , outline = 1 , fill = 1 )
+            ImageDraw.Draw( mask_img ).polygon( self.boundaryVertex , outline = 0 , fill = 1 )
             self.mask = np.array( mask_img )
             self.cropImg = np.empty( imgNumpy.shape, dtype = 'uint8' )
             self.cropImg = imgNumpy
@@ -117,29 +115,23 @@ class SourceImgWindow:
             self.cropImg[:,:,0] = self.cropImg[:,:,0] * self.mask
             self.cropImg[:,:,1] = self.cropImg[:,:,1] * self.mask
             self.cropImg[:,:,2] = self.cropImg[:,:,2] * self.mask
-            cv2.imshow( 'cropImg' , self.cropImg )
-            cv2.waitKey(0)
 
     def DoneFunc( self ):
-        print('done')
         if self.cropImg is not None:
-            self.mainWindowInstance.UpdateSourceImg( self.cropImg )
-            self.window.destroy()
+            self.mainWindowInstance.UpdateSource( self.cropImg , self.mask , self.boundaryVertex )
+            self.destroy()
         else:
             messagebox.showinfo( 'Hint','請先Crop一張圖片再按Done')
     
-    # callback
-    def ClickAddVertex(self, event ):
+    # Mouse Callback
+    def ClickAddVertex( self, event ):
         self.PushBoundaryVertex( event.x , event.y )
 
-    def ClickDeleteVertex(self, event ):
+    def ClickDeleteVertex( self, event ):
         self.PopBoundaryVertex()
 
-    def ClickDrawLine( self, evevt ):
-        self.DrawLine()
-
-def GetInstance( img, mainWindowInstance ):
-    sourceImgWindow = SourceImgWindow.get_instance( img, mainWindowInstance )
-    sourceImgWindow.window.withdraw()
+def init( mainWindowInstance ):
+    sourceImgWindow = SourceImgWindow( mainWindowInstance )
+    sourceImgWindow.withdraw()
     return sourceImgWindow
 
