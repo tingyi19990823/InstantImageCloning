@@ -2,6 +2,7 @@ import enum
 import math
 from operator import truediv
 from turtle import right
+from cv2 import normalize
 import numpy as np
 from PIL import Image
 from array import array
@@ -9,16 +10,13 @@ import cv2
 import math
 
 
-class BoundaryInfo:
-    def __init__(self, coord , length , leftAngle , rightAngle ) :
-        self.coord = coord # np array(x,y)
-        self.length = length
-        self.leftAngle = leftAngle
-        self.rightAngle = rightAngle
-
-class PixelInfo:
-    def __init__( self, ) :
-        print('test')
+def RowCol2ColRow( sourceBoundaryVertex ):
+    result = list()
+    for i in range( len(sourceBoundaryVertex) ):
+        x = sourceBoundaryVertex[ i ][ 0 ]
+        y = sourceBoundaryVertex[ i ][ 1 ]
+        result.append((y,x))
+    return result
 
 '''
 source: pil
@@ -31,23 +29,33 @@ def Start( source ,  sourcemask , sourceBoundaryVertex , target , centerCoord ):
     # 轉成 Numpy
     sourceImg = np.array( source )
     targetImg = np.array( target )
-    MeanValueCoordinate( sourcemask , sourceBoundaryVertex )
+    sourceBoundary = RowCol2ColRow( sourceBoundaryVertex )
+    centerCoordColRow = ( centerCoord[ 1 ] , centerCoord[ 0 ] )
 
-def MeanValueCoordinate( mask , BoundaryVertex ):
-    print('computing mean value coordinate')
-    size = np.where( mask == True ).count
-    resultAngles = np.empty( ( mask.shape[ 0 ] , mask.shape[ 1 ] , len( BoundaryVertex ) ) )
-    resultweights = np.empty( ( mask.shape[ 0 ] , mask.shape[ 1 ] , len( BoundaryVertex ) ) )
+    targetBoundary , offset = CalTargetBoundartVertex( sourceBoundary , centerCoordColRow )
+
+    weights = MeanValueCoordinate( sourcemask , sourceBoundary )              # 每個內部點對於每個邊界點的權重 list: [ ( height, width, 邊界點數 ) ]
+    diffs = CalDiff( sourceImg , targetImg , sourceBoundary , centerCoordColRow , offset )    # 每個邊界點的亮度差 shape: (邊界點數, 3)
+    result = SeamlessCloning( sourceImg , targetImg , targetBoundary , weights , diffs , offset , centerCoordColRow )
+    
+'''
+return weights: ( width, height, 邊界點數 )
+'''
+def MeanValueCoordinate( mask , sourceBoundaryVertex ):
+    print('computing mean value coordinate, boundaryVertex shape: ', np.array( sourceBoundaryVertex ).shape )
+
+    result = list()
     for col in range( mask.shape[ 0 ] ):
         for row in range( mask.shape[ 1 ] ):
             if mask[ col , row ] == True:
-                angles = CalAngle( col , row , BoundaryVertex )             # len( BoundaryVertex ) x 1
-                # weights = CalWeight( col , row , angles , BoundaryVertex )  # len( BoundaryVertex ) x 1
-                resultAngles[ col , row , : ] = angles[:,0]
-                # resultweights[ col , row , : ] = weights[:,0]
+                angles = CalAngle( col , row , sourceBoundaryVertex )             # shape: len( BoundaryVertex ) x 1
+                weights = CalWeight( col , row , angles , sourceBoundaryVertex )  # shape: len( BoundaryVertex )
+                # result[ 1 , col , row , : ] = weights
+                result.append( (col,row,weights) )
+    return result
 
-def CalAngle( col , row , BoundaryVertex ):
-    matrixSize = len( BoundaryVertex )
+def CalAngle( col , row , sourceBoundaryVertex ):
+    matrixSize = len( sourceBoundaryVertex )
     dotMatA = np.zeros( ( matrixSize , matrixSize*2 ) )
     dotMatB = np.zeros( ( matrixSize*2 , matrixSize ) )
     dotMat = np.zeros( ( matrixSize , matrixSize ) )
@@ -58,14 +66,13 @@ def CalAngle( col , row , BoundaryVertex ):
     normMat = np.zeros( ( matrixSize , 1 ) )
     normArray = []
     
-    for idx, ( x, y ) in enumerate ( BoundaryVertex ):
+    for idx, ( x, y ) in enumerate ( sourceBoundaryVertex ):
         vec = np.array((x,y)) - np.array((col,row))
-        # print('new vec: ',vec)
         norm = np.linalg.norm( vec )
         normArray.append( norm )
         vecArray.append( vec )
 
-    for idx, ( x, y ) in enumerate ( BoundaryVertex ):
+    for idx, ( x, y ) in enumerate ( sourceBoundaryVertex ):
         dotMatA[ idx , idx*2 ] = vecArray[ idx ][ 0 ] 
         dotMatA[ idx , idx*2 + 1 ] = vecArray[ idx ][ 1 ] 
 
@@ -77,14 +84,14 @@ def CalAngle( col , row , BoundaryVertex ):
         normMatA[ idx , idx ] = norm
         secondIdx = ( idx + 1 ) % matrixSize
         normMatB[ idx , 0 ] = normArray[ secondIdx ]
-
+    # print("norm: ", norm )
     dotMat = np.matmul( dotMatA , dotMatB )
     normMat = np.matmul( normMatA , normMatB )
     normMat = 1 / normMat
     cosAngle = np.matmul( dotMat , normMat )
     angles = np.arccos( cosAngle )
-    angles = angles * 180 / np.pi
-    print("angles.shape", angles.shape)
+    # angles = angles * 180 / np.pi
+    # print("angles.shape", angles.shape)
     return angles
 
     '''
@@ -137,24 +144,78 @@ def CalAngle( vec1 , vec2 ):
 
     '''
 
-def CalWeight( col , row , angles , BoundaryVertex ):
-    print('cal weight')
-    weights = np.empty((len(BoundaryVertex)))
-    lambdaI = np.empty((len(BoundaryVertex)))
+def CalWeight( col , row , angles , sourceBoundaryVertex ):
+    weights = np.empty((len(sourceBoundaryVertex)))
+    lambdaI = np.empty((len(sourceBoundaryVertex)))
 
-    size = len(BoundaryVertex)
-    # 有問題
-    length = np.linalg.norm( np.array( BoundaryVertex ) - np.array( ( col , row ) ) )
+    normArray = np.empty((len(sourceBoundaryVertex)))
+    
+    for idx, ( x, y ) in enumerate ( sourceBoundaryVertex ):
+        vec = np.array((x,y)) - np.array((col,row))
+        norm = np.linalg.norm( vec )
+        normArray[ idx ] = norm
+
+    size = len(sourceBoundaryVertex)
+    
     tanAngles = np.tan( angles / 2 )
+    
     
     for i in range( size ):
         leftIdx = ( i + 1 ) % size
         rightIdx = ( i - 1 ) % size
-        weights[ i ] = ( tanAngles[ leftIdx ] + tanAngles[ rightIdx ] ) / length
+        weights[ i ] = ( tanAngles[ leftIdx ] + tanAngles[ rightIdx ] ) / normArray[ i ]
 
     lambdaI = weights / np.sum( weights )
-
+    # print('angles: ',angles)
+    # print('tanangles',tanAngles)
+    # print('weights: ', lambdaI )
     return lambdaI
 
-# def CalDiff( col , row , BoundaryVertex ):
+def CalDiff( source , target , sourceBoundaryVertex , centerCoord , offset ):
+    print('cal diff along boundary')
 
+    length = len( sourceBoundaryVertex )
+    diffs = np.empty( ( length , 3 ) )
+    for idx , (col,row) in enumerate( sourceBoundaryVertex ):
+        
+        targetCol , targetRow = Source2TargetCoord( col , row , centerCoord , offset )
+        
+        diff = target[ targetCol , targetRow ] - source[ col , row ]
+        diffs[ idx ] = diff
+
+    return diffs
+
+def CalTargetBoundartVertex( sourceBoundaryVertex , centerCoord ):
+    length = len( sourceBoundaryVertex )
+    offsetRow = 0
+    offsetCol = 0
+    for i in range( length ):
+        offsetCol += sourceBoundaryVertex[ i ][ 0 ] / length
+        offsetRow += sourceBoundaryVertex[ i ][ 1 ] / length
+    
+    targetBoundaryVertex = sourceBoundaryVertex.copy()
+    for i in range( length ):
+        sourceCol , sourceRow = sourceBoundaryVertex[ i ]
+        targetCol = sourceCol - int( offsetCol ) + centerCoord[ 0 ]
+        targetRow = sourceRow - int( offsetRow ) + centerCoord[ 1 ]
+        targetBoundaryVertex = ( targetCol , targetRow )
+
+    return targetBoundaryVertex , ( offsetCol , offsetRow )
+
+def Source2TargetCoord( col , row , centerCoord , offset ):
+    resultCol = col - offset[ 0 ] + centerCoord[ 0 ]
+    resultRow = row - offset[ 1 ] + centerCoord[ 1 ]
+    return ( int(resultCol) , int(resultRow) )
+
+def SeamlessCloning( sourceImg , targetImg , targetBoundartVertex , weights , diffs , offset , centerCoord ):
+    print('start seamless Cloning')
+    for idx , (height,width,weights) in enumerate( weights ):
+        rX = 0
+        targetHeight , targetWidth = Source2TargetCoord( height , width , centerCoord , offset )
+        for boundaryIdx in range( len(targetBoundartVertex) ):
+            rX += diffs[ boundaryIdx ] * weights[ boundaryIdx ]
+        # print('source: ', sourceImg[ height , width , : ] )
+        # print('rx', rX)
+        targetImg[ targetHeight , targetWidth , : ] = sourceImg[ height , width , : ] + rX
+
+    cv2.imwrite('result.jpg',cv2.cvtColor(targetImg, cv2.COLOR_BGR2RGB))

@@ -27,7 +27,7 @@ class MainWindow:
             self.sourceImg = Image.open( 'source.png' )
             self.sourceShow = self.sourceImg.copy()
             self.sourcemask = None
-            self.sourceBoundaryVertex = list()
+            self.sourceBoundaryVertex = list()  # local coord
 
             self.targetImg = Image.open( 'target.png' )
             self.targetShow = self.targetImg.copy()
