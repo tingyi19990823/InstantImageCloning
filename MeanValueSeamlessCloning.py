@@ -8,6 +8,7 @@ from PIL import Image
 from array import array
 import cv2
 import math
+import time
 
 
 def RowCol2ColRow( sourceBoundaryVertex ):
@@ -42,19 +43,98 @@ def Start( source ,  sourcemask , sourceBoundaryVertex , target , centerCoord ):
 return weights: ( width, height, 邊界點數 )
 '''
 def MeanValueCoordinate( mask , sourceBoundaryVertex ):
-    print('computing mean value coordinate, boundaryVertex shape: ', np.array( sourceBoundaryVertex ).shape )
+    print('computing mean value coordinate, boundaryVertex shape: , clock: ', np.array( sourceBoundaryVertex ).shape , time.clock() )
 
-    result = list()
-    for col in range( mask.shape[ 0 ] ):
-        for row in range( mask.shape[ 1 ] ):
-            if mask[ col , row ] == True:
-                angles = CalAngle( col , row , sourceBoundaryVertex )             # shape: len( BoundaryVertex ) x 1
-                weights = CalWeight( col , row , angles , sourceBoundaryVertex )  # shape: len( BoundaryVertex )
-                # result[ 1 , col , row , : ] = weights
-                result.append( (col,row,weights) )
-    return result
+    # result = list()
+    # for col in range( mask.shape[ 0 ] ):
+    #     for row in range( mask.shape[ 1 ] ):
+    #         if mask[ col , row ] == True:
+    #             angles = CalAngle( col , row , sourceBoundaryVertex )             # shape: len( BoundaryVertex ) x 1
+    #             weights = CalWeight( col , row , angles , sourceBoundaryVertex )  # shape: len( BoundaryVertex )
+    #             # result[ 1 , col , row , : ] = weights
+    #             result.append( (col,row,weights) )
 
-def CalAngle( col , row , sourceBoundaryVertex ):
+    # 先取得non zero index
+    nonZeroX, nonZeroY = np.nonzero(mask)
+
+    # 內部點數量
+    innerPointSize = len(nonZeroX)
+
+    # 把內部點座標改成[x ,y ,x ,y...]的形式
+    arrayCoordinate = np.insert(nonZeroY, np.arange(innerPointSize), nonZeroX)
+
+    # 先把sourceBoundaryVertex重複innerPointSize次(與內部點數量相同)
+    sourceBoundaryVertex = np.array(sourceBoundaryVertex)               # 轉numpy
+    flattenSourceBoundaryVertex = np.reshape(sourceBoundaryVertex, -1)  # 攤平。假設原始有4個boundary vertex, 就會變成4*2=8(x,y,x,y...)
+    tileBoundary = np.tile(flattenSourceBoundaryVertex, innerPointSize) # 重複內部點數量次(在上述例子就是內部點數量 * 8)
+    
+    # 各自resahpe成(總內部點數量 * 對應值數量)的形狀
+    totalBoundary = np.reshape(tileBoundary, (innerPointSize, -1))       # 座標點的攤平確保形狀正確(內部點數量 * 邊界點座標) => x, y
+    totalCoordinate = np.reshape(arrayCoordinate, (innerPointSize, 2))   # 內部點座標(內部點數量 * 2) => x, y
+
+    # 把兩個資料做Concat(先內部點座標，再邊界點座標)
+    combineColumn = np.hstack((totalCoordinate, totalBoundary))
+
+    # 算Angle & Weight
+    allWeight = np.apply_along_axis(CalAngle, 1, combineColumn)
+
+    # 把內部點座標與結果Weight做Concat(內部點座標, Weight)
+    combineCoordAngle = np.hstack((totalCoordinate, allWeight))
+
+    # 轉成list內包含一堆tuple
+    tupleCoorAngle = tuple(map(tuple, combineCoordAngle))
+    listTuple = list(tupleCoorAngle)
+    
+    return listTuple
+
+def CalAngle( dataPackage ):
+    # 把col跟row分離出來
+    col = dataPackage[0]
+    row = dataPackage[1]
+
+    # 把sourceBoundaryVertex分離出來
+    sourceBoundaryVertex = dataPackage[2:]
+    sourceBoundaryVertex = np.reshape(sourceBoundaryVertex, (-1, 2))
+
+    Size = len( sourceBoundaryVertex )
+    phiArray = []
+    angles = []
+  
+    for idx, ( x, y ) in enumerate ( sourceBoundaryVertex ):
+        phiArray.append(np.arctan2(x-col, y-row))
+
+    for idx in range(Size):
+        j = (idx+1) % Size
+        angles.append(phiArray[idx] - phiArray[j])
+    angles = np.array(angles)
+
+    # 算 weights
+    weights = np.empty((len(sourceBoundaryVertex)))
+    lambdaI = np.empty((len(sourceBoundaryVertex)))
+
+    normArray = np.empty((len(sourceBoundaryVertex)))
+    
+    for idx, ( x, y ) in enumerate ( sourceBoundaryVertex ):
+        vec = np.array((x,y)) - np.array((col,row))
+        norm = np.linalg.norm( vec )
+        normArray[ idx ] = norm
+
+    size = len(sourceBoundaryVertex)
+    
+    tanAngles = np.tan( angles / 2 )
+    
+    
+    for i in range( size ):
+        leftIdx = ( i ) % size
+        rightIdx = ( i - 1 ) % size
+        weights[ i ] = ( tanAngles[ rightIdx ] + tanAngles[ leftIdx ] ) / normArray[ i ]
+
+    weightSum = np.sum(weights)
+    lambdaI = weights / weightSum
+    
+    return lambdaI
+
+    '''
     matrixSize = len( sourceBoundaryVertex )
     dotMatA = np.zeros( ( matrixSize , matrixSize*2 ) )
     dotMatB = np.zeros( ( matrixSize*2 , matrixSize ) )
@@ -93,6 +173,7 @@ def CalAngle( col , row , sourceBoundaryVertex ):
     # angles = angles * 180 / np.pi
     # print("angles.shape", angles.shape)
     return angles
+    '''
 
     '''
     # for i in range( len( BoundaryVertex ) ):
@@ -144,7 +225,12 @@ def CalAngle( vec1 , vec2 ):
 
     '''
 
-def CalWeight( col , row , angles , sourceBoundaryVertex ):
+def CalWeight( coord , angles , sourceBoundaryVertex ):
+
+    # 把col跟row分離出來
+    col = coord[0]
+    row = coord[1]
+
     weights = np.empty((len(sourceBoundaryVertex)))
     lambdaI = np.empty((len(sourceBoundaryVertex)))
 
@@ -167,9 +253,7 @@ def CalWeight( col , row , angles , sourceBoundaryVertex ):
 
     weightSum = np.sum(weights)
     lambdaI = weights / weightSum
-    # print('angles: ',angles)
-    # print('tanangles',tanAngles)
-    # print('weights: ', lambdaI )
+
     return lambdaI
 
 def CalDiff( source , target , sourceBoundaryVertex , centerCoord , offset ):
@@ -212,8 +296,14 @@ def SeamlessCloning( sourceImg , targetImg , targetBoundaryVertex , lambdas , di
     print('start seamless Cloning')
     sourceImg = np.array(sourceImg, dtype=int)
     targetImg = np.array(targetImg, dtype=int)
-
-    for idx , (height,width,weights) in enumerate( lambdas ):
+    length = len(targetBoundaryVertex)
+    # for idx , (height,width,weights) in enumerate( lambdas ):
+    for idx , data in enumerate( lambdas ):
+        height = int(data[0])
+        width = int(data[1])
+        weights = []
+        for i in range(length):
+            weights.append(data[ i + 2 ])
         rX = 0
         targetHeight , targetWidth = Source2TargetCoord( height , width , centerCoord , offset )
         for boundaryIdx in range( len(targetBoundaryVertex) ):
