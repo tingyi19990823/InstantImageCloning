@@ -25,16 +25,16 @@ class MainWindow:
             self.window.title('InstantImageCloning')
             self.window.geometry( '600x500' )
 
-            self.sourceImg = Image.open( 'source.png' )
+            self.sourceImg = Image.open( 'pic/source.png' )
             self.sourceShow = self.sourceImg.copy()
             self.sourcemask = None
             self.sourceBoundaryVertex = list()  # local coord
 
-            self.targetImg = Image.open( 'target.png' )
+            self.targetImg = Image.open( 'pic/target.png' )
             self.targetShow = self.targetImg.copy()
             self.centerCoord = None
 
-            self.resultImg = Image.open( 'result.png' )
+            self.resultImg = Image.open( 'pic/result.png' )
             self.resultShow = self.resultImg.copy()
 
             self.CreateButton()
