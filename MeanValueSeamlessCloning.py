@@ -193,12 +193,12 @@ def CalTargetBoundartVertex( sourceBoundaryVertex , centerCoord ):
         offsetCol += sourceBoundaryVertex[ i ][ 0 ] / length
         offsetRow += sourceBoundaryVertex[ i ][ 1 ] / length
     
-    targetBoundaryVertex = sourceBoundaryVertex.copy()
+    targetBoundaryVertex = []
     for i in range( length ):
         sourceCol , sourceRow = sourceBoundaryVertex[ i ]
         targetCol = sourceCol - int( offsetCol ) + centerCoord[ 0 ]
         targetRow = sourceRow - int( offsetRow ) + centerCoord[ 1 ]
-        targetBoundaryVertex = ( targetCol , targetRow )
+        targetBoundaryVertex.append( ( targetCol , targetRow ) )
 
     return targetBoundaryVertex , ( offsetCol , offsetRow )
 
