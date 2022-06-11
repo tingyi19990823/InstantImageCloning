@@ -33,11 +33,11 @@ def Start( source ,  sourcemask , sourceBoundaryVertex , target , centerCoord ):
     centerCoordColRow = ( centerCoord[ 1 ] , centerCoord[ 0 ] )
     targetBoundary , offset = CalTargetBoundartVertex( sourceBoundary , centerCoordColRow )
 
-    weights = MeanValueCoordinate( sourcemask , sourceBoundary )              # 每個內部點對於每個邊界點的權重 list: [ ( height, width, 邊界點數 ) ]
-    diffs = CalDiff( sourceImg , targetImg , sourceBoundary , centerCoordColRow , offset )    # 每個邊界點的亮度差 shape: (邊界點數, 3)
+    weights = MeanValueCoordinate( sourcemask , sourceBoundary )                                # 每個內部點對於每個邊界點的權重 list: [ ( height, width, 邊界點數 ) ]
+    diffs = CalDiff( sourceImg , targetImg , sourceBoundary , centerCoordColRow , offset )      # 每個邊界點的亮度差 shape: (邊界點數, 3)
     result = SeamlessCloning( sourceImg , targetImg , targetBoundary , weights , diffs , offset , centerCoordColRow )
 
-    cv2.imwrite('result.jpg',cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
+    return Image.fromarray( result )
 '''
 return weights: ( width, height, 邊界點數 )
 '''
@@ -215,4 +215,5 @@ def SeamlessCloning( sourceImg , targetImg , targetBoundartVertex , weights , di
         for boundaryIdx in range( len(targetBoundartVertex) ):
             rX += diffs[ boundaryIdx ] * weights[ boundaryIdx ]
         targetImg[ targetHeight , targetWidth , : ] = sourceImg[ height , width , : ] + rX
+
     return targetImg

@@ -3,7 +3,8 @@ from PIL import Image, ImageTk, ImageDraw
 import SourceWindow, TargetWindow, MeanValueSeamlessCloning
 from tkinter import filedialog
 from tkinter import messagebox
-
+import cv2
+import numpy as np
 
 window = None
 
@@ -120,11 +121,15 @@ class MainWindow:
     
     def BlendingClick( self ):
         print('Blending button clicked')
-        print(self.sourceBoundaryVertex)
-        MeanValueSeamlessCloning.Start( self.sourceImg ,  self.sourcemask , self.sourceBoundaryVertex , self.targetImg , self.centerCoord )
+        self.resultShow = MeanValueSeamlessCloning.Start( self.sourceImg ,  self.sourcemask , self.sourceBoundaryVertex , self.targetImg , self.centerCoord )
+        self.SetImg( 'result' , self.resultShow )
 
     def SaveClick( self ):
         print('Save button clicked')
+        tmp = np.array( self.resultShow )
+        tmp = cv2.cvtColor( tmp , cv2.COLOR_RGB2BGR )
+        cv2.imwrite( 'result.jpg' , tmp )
+        print('Save Done')
 
     def OpenImage(self):
         filePath = filedialog.askopenfilename(
