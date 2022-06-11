@@ -176,12 +176,12 @@ def CalDiff( source , target , sourceBoundaryVertex , centerCoord , offset ):
     print('cal diff along boundary')
 
     length = len( sourceBoundaryVertex )
-    diffs = np.empty( ( length , 3 ) )
+    diffs = np.empty( ( length , 3 ), dtype=int )
     for idx , (col,row) in enumerate( sourceBoundaryVertex ):
         
         targetCol , targetRow = Source2TargetCoord( col , row , centerCoord , offset )
         
-        diff = target[ targetCol , targetRow ] - source[ col , row ]
+        diff = np.array(target[ targetCol , targetRow ], dtype=int) - np.array(source[ col , row ], dtype=int)
         diffs[ idx ] = diff
 
     return diffs
@@ -210,11 +210,20 @@ def Source2TargetCoord( col , row , centerCoord , offset ):
 
 def SeamlessCloning( sourceImg , targetImg , targetBoundaryVertex , lambdas , diffs , offset , centerCoord ):
     print('start seamless Cloning')
+    sourceImg = np.array(sourceImg, dtype=int)
+    targetImg = np.array(targetImg, dtype=int)
+
     for idx , (height,width,weights) in enumerate( lambdas ):
         rX = 0
         targetHeight , targetWidth = Source2TargetCoord( height , width , centerCoord , offset )
         for boundaryIdx in range( len(targetBoundaryVertex) ):
             rX += diffs[ boundaryIdx ] * weights[ boundaryIdx ]
-        targetImg[ targetHeight , targetWidth , : ] = sourceImg[ height , width , : ] + rX
+        intRx = np.array(rX, dtype=int)
+        targetImg[ targetHeight , targetWidth , : ] = sourceImg[height, width, :] + (intRx)
+
+    targetImg[ targetImg < 0 ] = 0
+    targetImg[ targetImg > 255 ] = 255
+
+    targetImg = np.array(targetImg, dtype=np.uint8)
 
     return targetImg

@@ -135,7 +135,7 @@ class MainWindow:
         filePath = filedialog.askopenfilename(
             filetypes =
                 [
-                    ('imgae files',('.png', '.jpg'))
+                    ('imgae files',('.jpeg', '.jpg'))
                 ]
             )
         self.imgPath = filePath
