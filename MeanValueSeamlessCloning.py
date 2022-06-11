@@ -31,11 +31,11 @@ def Start( source ,  sourcemask , sourceBoundaryVertex , target , centerCoord ):
     targetImg = np.array( target )
     sourceBoundary = RowCol2ColRow( sourceBoundaryVertex )
     centerCoordColRow = ( centerCoord[ 1 ] , centerCoord[ 0 ] )
-    targetBoundary , offset = CalTargetBoundartVertex( sourceBoundary , centerCoordColRow )
+    targetBoundary , offset = CalTargetBoundaryVertex( sourceBoundary , centerCoordColRow )
 
-    weights = MeanValueCoordinate( sourcemask , sourceBoundary )                                # 每個內部點對於每個邊界點的權重 list: [ ( height, width, 邊界點數 ) ]
+    lambdas = MeanValueCoordinate( sourcemask , sourceBoundary )                                # 每個內部點對於每個邊界點的權重 list: [ ( height, width, 邊界點數 ) ]
     diffs = CalDiff( sourceImg , targetImg , sourceBoundary , centerCoordColRow , offset )      # 每個邊界點的亮度差 shape: (邊界點數, 3)
-    result = SeamlessCloning( sourceImg , targetImg , targetBoundary , weights , diffs , offset , centerCoordColRow )
+    result = SeamlessCloning( sourceImg , targetImg , targetBoundary , lambdas , diffs , offset , centerCoordColRow )
 
     return Image.fromarray( result )
 '''
@@ -161,11 +161,12 @@ def CalWeight( col , row , angles , sourceBoundaryVertex ):
     
     
     for i in range( size ):
-        leftIdx = ( i + 1 ) % size
+        leftIdx = ( i ) % size
         rightIdx = ( i - 1 ) % size
-        weights[ i ] = ( tanAngles[ leftIdx ] + tanAngles[ rightIdx ] ) / normArray[ i ]
+        weights[ i ] = ( tanAngles[ rightIdx ] + tanAngles[ leftIdx ] ) / normArray[ i ]
 
-    lambdaI = weights / np.sum( weights )
+    weightSum = np.sum(weights)
+    lambdaI = weights / weightSum
     # print('angles: ',angles)
     # print('tanangles',tanAngles)
     # print('weights: ', lambdaI )
@@ -185,7 +186,7 @@ def CalDiff( source , target , sourceBoundaryVertex , centerCoord , offset ):
 
     return diffs
 
-def CalTargetBoundartVertex( sourceBoundaryVertex , centerCoord ):
+def CalTargetBoundaryVertex( sourceBoundaryVertex , centerCoord ):
     length = len( sourceBoundaryVertex )
     offsetRow = 0
     offsetCol = 0
@@ -207,12 +208,12 @@ def Source2TargetCoord( col , row , centerCoord , offset ):
     resultRow = row - offset[ 1 ] + centerCoord[ 1 ]
     return ( int(resultCol) , int(resultRow) )
 
-def SeamlessCloning( sourceImg , targetImg , targetBoundartVertex , weights , diffs , offset , centerCoord ):
+def SeamlessCloning( sourceImg , targetImg , targetBoundaryVertex , lambdas , diffs , offset , centerCoord ):
     print('start seamless Cloning')
-    for idx , (height,width,weights) in enumerate( weights ):
+    for idx , (height,width,weights) in enumerate( lambdas ):
         rX = 0
         targetHeight , targetWidth = Source2TargetCoord( height , width , centerCoord , offset )
-        for boundaryIdx in range( len(targetBoundartVertex) ):
+        for boundaryIdx in range( len(targetBoundaryVertex) ):
             rX += diffs[ boundaryIdx ] * weights[ boundaryIdx ]
         targetImg[ targetHeight , targetWidth , : ] = sourceImg[ height , width , : ] + rX
 
