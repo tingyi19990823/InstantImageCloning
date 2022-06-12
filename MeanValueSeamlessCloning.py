@@ -1,8 +1,10 @@
+from builtins import breakpoint
 import enum
 import math
 from operator import truediv
 from turtle import right
 from cv2 import normalize
+from matplotlib.cbook import flatten
 import numpy as np
 from PIL import Image
 from array import array
@@ -57,6 +59,9 @@ def MeanValueCoordinate( mask , sourceBoundaryVertex ):
     # 先取得non zero index
     nonZeroX, nonZeroY = np.nonzero(mask)
 
+    # 邊界點數量
+    boundaryVertexSize = np.array(sourceBoundaryVertex).shape[0]
+
     # 內部點數量
     innerPointSize = len(nonZeroX)
 
@@ -76,107 +81,8 @@ def MeanValueCoordinate( mask , sourceBoundaryVertex ):
     combineColumn = np.hstack((totalCoordinate, totalBoundary))
 
     # 算Angle & Weight
-    allWeight = np.apply_along_axis(CalAngle, 1, combineColumn)
-
-
-    # 直接把CalAngle整段做效能改善(apply_along_axis沒有用，超慢ㄇㄉ)
-
-
-
-
-    # # 把col跟row分離出來
-    # col = dataPackage[0]
-    # row = dataPackage[1]
-
-    # # 把sourceBoundaryVertex分離出來
-    # sourceBoundaryVertex = dataPackage[2:]
-    # sourceBoundaryVertex = np.reshape(sourceBoundaryVertex, (-1, 2))
-
-    # Size = len( sourceBoundaryVertex )
-    # phiArray = []
-    # angles = []
-  
-    # # for idx, ( x, y ) in enumerate ( sourceBoundaryVertex ):
-    # #     phiArray.append(np.arctan2(x-col, y-row))
-
-    # # 效能改善版本(phiArray)
-    # flattenSrouceBoundaryVertex = np.reshape(sourceBoundaryVertex, -1)
-    # xMinusCol = flattenSrouceBoundaryVertex[::2] - col
-    # yMinusRow = flattenSrouceBoundaryVertex[1::2] - row
-    # phiArray = np.arctan2(yMinusRow, xMinusCol)
-
-
-    # # for idx in range(Size):
-    # #     j = (idx+1) % Size
-    # #     angles.append(phiArray[idx] - phiArray[j])
-    # # angles = np.array(angles)
-
-    # # 效能改善版本(angles)
-    # secondPhiArray = phiArray[1:]
-    # secondPhiArray = np.append(secondPhiArray, phiArray[0])
-    # angles = phiArray - secondPhiArray
-
-
-    # # 算 weights
-    # weights = np.empty((len(sourceBoundaryVertex)))
-    # lambdaI = np.empty((len(sourceBoundaryVertex)))
-    # normArray = np.empty((len(sourceBoundaryVertex)))
-    
-    # # for idx, ( x, y ) in enumerate ( sourceBoundaryVertex ):
-    # #     vec = np.array((x,y)) - np.array((col,row))
-    # #     norm = np.linalg.norm( vec )
-    # #     normArray[ idx ] = norm
-
-    # # 算weights的效能改善版本
-    # vec = np.insert(yMinusRow, np.arange(len(xMinusCol)), xMinusCol)
-    # vec = np.reshape(vec, (-1, 2))
-    # norm = np.linalg.norm(vec, axis=1)
-    # normArray = np.copy(norm)
-
-
-    # size = len(sourceBoundaryVertex)
-    
-    # tanAngles = np.tan( angles / 2 )
-    
-    
-    # # for i in range( size ):
-    # #     leftIdx = ( i ) % size
-    # #     rightIdx = ( i - 1 ) % size
-    # #     weights[ i ] = ( tanAngles[ rightIdx ] + tanAngles[ leftIdx ] ) / normArray[ i ]
-
-    # # 效能改善版本
-    # leftTanAngle = np.copy(tanAngles)
-    # rightTanAngle = np.insert(tanAngles[:-1], 0, tanAngles[-1])
-    # weights = (rightTanAngle + leftTanAngle) / normArray
-
-
-    # weightSum = np.sum(weights)
-    # lambdaI = weights / weightSum
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    # allWeight = np.apply_along_axis(CalAngle, 1, combineColumn)
+    allWeight = CalAngle(combineColumn, boundaryVertexSize, innerPointSize)
 
     # 把內部點座標與結果Weight做Concat(內部點座標, Weight)
     combineCoordAngle = np.hstack((totalCoordinate, allWeight))
@@ -187,7 +93,140 @@ def MeanValueCoordinate( mask , sourceBoundaryVertex ):
     
     return listTuple
 
-def CalAngle( dataPackage ):
+def CalAngle( combineColumn, boundaryVertexSize, innerPointSize ):
+
+    # 直接把CalAngle整段做效能改善(apply_along_axis沒有用，超慢ㄇㄉ)
+    dataPatchSize = combineColumn.shape[1]
+    print('Check combineColumn shape', combineColumn.shape)
+    print('Check innerPointSize', innerPointSize)
+    print('Check dataPatchSize', dataPatchSize)
+
+    # 把所有資料攤平
+    flattenAll = np.reshape(combineColumn, -1)
+
+    # 算phiArray(會有innerPointSize組資料)
+    allCol = flattenAll[::dataPatchSize]    # pixel1 col, pixel2 col...
+    allRow = flattenAll[1::dataPatchSize]   # pixel1 row, pixel2 row...
+
+    # 取出每一組的boundary
+    getBoundaryCondition = np.ones((flattenAll.shape), dtype=bool)
+    getBoundaryCondition[::dataPatchSize] = False   # 不取出col位置資料
+    getBoundaryCondition[1::dataPatchSize] = False  # 不取出row位置資料
+    print("Check boundary condition", getBoundaryCondition[:20])
+
+    boundaryVertex = flattenAll[getBoundaryCondition > 0]   # 只會有重複dataPatchSize的boundaryVertex(x, y, x, y...)
+    print("Check boundaryVertex", boundaryVertex[:20])
+
+    # 重複 allCol跟allRow boundaryVertexSize * 2次，再把兩者互斥的位置改成0
+    # 假設4個邊界點，那麼就要[col1,    0,   col1,    0,    col1,    0, col1,    0]
+    # 假設4個邊界點，那麼就要[0,    row1,   0,    row1,    0,    row1, 0,    row1]
+    # boundaryVertex目前是:[ x,       y,   x,       y,    x,       y, x,       y]
+    # 最後boundaryVertex與前面兩個相減得出正確的boundaryVertex用於算出phiArray
+    repeatCol = np.repeat(allCol, boundaryVertexSize * 2)
+    repeatRow = np.repeat(allRow, boundaryVertexSize * 2)
+
+    forMinusCol = np.copy(repeatCol)
+    forMinusRow = np.copy(repeatRow)
+
+    forMinusCol[1::2] = 0
+    forMinusRow[::2] = 0
+
+    print('Check forMinusCol', forMinusCol[:20])
+    print('Check forMinusRow', forMinusRow[:20])
+
+    minusBoundaryVertex = boundaryVertex - forMinusCol - forMinusRow
+    print('Check minusBoundaryVertex', minusBoundaryVertex[:20])
+
+    # 算出正確的phiArray(長度是: 邊界點數量 * 總共內部pixel數量)
+    minusBoundaryVertexX = minusBoundaryVertex[::2]
+    minusBoundaryVertexY = minusBoundaryVertex[1::2]
+    phiArray = np.arctan2(minusBoundaryVertexY, minusBoundaryVertexX)
+
+    print('Check phiArray', phiArray[:20])
+
+    # 算angles
+    secondPhiArray = np.copy(phiArray)
+
+    # 先取出第一個邊界點的值
+    firstBoundary = np.copy(phiArray)
+    firstBoundary = firstBoundary[::boundaryVertexSize]
+    repeatFirstBoundary = np.repeat(firstBoundary, boundaryVertexSize)
+
+    # 把除了最後一個batch元素之外的值都清0
+    maskLastBoundaryIndex = np.zeros(phiArray.shape)
+    maskLastBoundaryIndex[boundaryVertexSize - 1::boundaryVertexSize] = 1
+
+    # 相乘後加回secondPhiArray
+    maskRepeatFirst = repeatFirstBoundary * maskLastBoundaryIndex
+
+    print('Check maskRepeatFirst', maskRepeatFirst[:20])
+
+    # 陣列向左移動，然後把邊界點數量batch的最後一個變成0
+    secondPhiArray = np.roll(secondPhiArray, -1)
+    secondPhiArray[boundaryVertexSize - 1::boundaryVertexSize] = 0
+
+    print('Before adding last boundary for last index(secondPhiArray)', secondPhiArray[:20])
+
+    # 與maskRepeatFirst相加(設定最後一個欄位)
+    secondPhiArray = secondPhiArray + maskRepeatFirst
+    print('secondPhiArray result', secondPhiArray[:20])
+
+    # 算angles
+    angles = phiArray - secondPhiArray
+
+    # 算weights
+    print("Check minusBoundaryVertexX", minusBoundaryVertexX[:20])
+    print("Check minusBoundaryVertexY", minusBoundaryVertexY[:20])
+    norm = np.linalg.norm((minusBoundaryVertexX, minusBoundaryVertexY), axis=0)
+    normArray = np.copy(norm)
+    print('Check norm shape', normArray.shape)
+
+    tanAngles = np.tan(angles / 2)
+    print("Check tanAngles shape", tanAngles.shape)
+
+    leftTanAngle = np.copy(tanAngles)
+
+    # 陣列向右移動，然後把邊界點數量batch的第一個變成0
+    rightTanAngle = np.roll(tanAngles, 1)
+    rightTanAngle[::boundaryVertexSize] = 0
+
+    print('Check leftTanAngle', leftTanAngle[:20])
+    print('Check rightTanAngle after right roll', rightTanAngle[:20])
+
+    # 把除了第一個batch元素之外的值都清0
+    maskFirstBoundaryIndex = np.zeros(phiArray.shape)
+    maskFirstBoundaryIndex[::boundaryVertexSize] = 1
+
+    # 取出最後一個Batch元素並重複boundaryVertexSize次
+    lastBoundaryAngle = np.copy(tanAngles)
+    lastBoundaryAngle = lastBoundaryAngle[boundaryVertexSize - 1::boundaryVertexSize]
+    repeatLastBoundaryAngle = np.repeat(lastBoundaryAngle, boundaryVertexSize)
+
+    # 相乘後加回rightTanAngle
+    maskRepeatLast = maskFirstBoundaryIndex * repeatLastBoundaryAngle
+
+    rightTanAngle = rightTanAngle + maskRepeatLast
+
+    print('Check correct rightTanAngle', rightTanAngle[:20])
+
+    weights = (rightTanAngle + leftTanAngle) / normArray
+
+    reshapeWeights = np.reshape(weights, (-1, boundaryVertexSize))
+    weightSum = np.sum(reshapeWeights, axis=1)
+    print('Check weightSum shape', weightSum.shape)
+
+    repeatWeightSum = np.repeat(weightSum, boundaryVertexSize)
+    repeatWeightSum = np.reshape(repeatWeightSum, (-1, boundaryVertexSize))
+    print('Check repeatWeightSum shape', repeatWeightSum.shape)
+
+    lambdaI = reshapeWeights / repeatWeightSum
+
+    print('Check lambdaI shape', lambdaI.shape)
+
+    return lambdaI
+
+    '''
+    # 以下是用apply_along_axis做的效能改善
     # 把col跟row分離出來
     col = dataPackage[0]
     row = dataPackage[1]
@@ -258,6 +297,8 @@ def CalAngle( dataPackage ):
     lambdaI = weights / weightSum
     
     return lambdaI
+
+    '''
 
     '''
     matrixSize = len( sourceBoundaryVertex )
