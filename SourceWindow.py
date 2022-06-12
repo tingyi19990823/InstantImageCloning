@@ -25,12 +25,14 @@ class SourceImgWindow( tk.Toplevel ):
         self.modifiedImg = None
         self.draw = None
         self.label = None
+        self.scale = 1
 
         self.CreateButton()
         # 需要回傳給 MainWindow
         self.cropImg = None
         self.mask = None
         self.boundaryVertex = list()
+        self.originScaleBoundaryVertex = list()
 
     def on_closing( self ):
         self.destroy()
@@ -42,10 +44,24 @@ class SourceImgWindow( tk.Toplevel ):
     def SetImg( self , img ):
         self.originImg = img
         self.modifiedImg = img.copy()
+        
+        width = img.width
+        height = img.height
+
+        finalHeight = height
+        finalWidth = width
+        while( finalWidth > 1000 or finalHeight > 700 ):
+            self.scale -= 0.1
+            finalWidth = int(width * self.scale)
+            finalHeight = int(height * self.scale)
+
+        self.modifiedImg = self.modifiedImg.resize( ( finalWidth , finalHeight ) )
         self.draw = ImageDraw.Draw( self.modifiedImg )
-        width = img.width + 10
-        height = img.height + 64
-        my_geometry = str(width) + 'x' + str(height)
+
+        finalWidth = finalWidth + 10
+        finalHeight = finalHeight + 64
+
+        my_geometry = str(finalWidth) + 'x' + str(finalHeight)
         self.geometry( my_geometry )
 
     def UpdateImg( self ):
@@ -60,13 +76,21 @@ class SourceImgWindow( tk.Toplevel ):
 
     def ResetImg(self):
         self.modifiedImg = self.originImg.copy()
+        width = int( self.modifiedImg.width * self.scale )
+        height = int( self.modifiedImg.height * self.scale )
+        self.modifiedImg = self.modifiedImg.resize( ( width , height ) )
+
         self.draw = ImageDraw.Draw( self.modifiedImg )
 
     def PushBoundaryVertex(self, x, y):
         if( x >= 0 and x < self.originImg.width and y >= 0 and y< self.originImg.height ):
             self.boundaryVertex.append( (x,y) )
+            self.originScaleBoundaryVertex.append( ( int( x / self.scale ) , int( y / self.scale ) ) )
+
             print(self.boundaryVertex)
+
             self.draw.ellipse( (x-3,y-3,x+3,y+3), fill = 'blue', outline = 'white' )
+
             if len( self.boundaryVertex ) > 1:
                 self.DrawLine()
             self.UpdateImg()
@@ -107,7 +131,8 @@ class SourceImgWindow( tk.Toplevel ):
         if len( self.boundaryVertex ) > 2:
             imgNumpy = np.asarray( self.originImg )
             mask_img = Image.new( '1', ( imgNumpy.shape[1] , imgNumpy.shape[0] ) , 0 )
-            ImageDraw.Draw( mask_img ).polygon( self.boundaryVertex , outline = 0 , fill = 1 )
+
+            ImageDraw.Draw( mask_img ).polygon( self.originScaleBoundaryVertex , outline = 0 , fill = 1 )
             self.mask = np.array( mask_img )
             self.cropImg = np.empty( imgNumpy.shape, dtype = 'uint8' )
             self.cropImg = imgNumpy
@@ -118,7 +143,7 @@ class SourceImgWindow( tk.Toplevel ):
 
     def DoneFunc( self ):
         if self.cropImg is not None:
-            self.mainWindowInstance.UpdateSource( self.cropImg , self.mask , self.boundaryVertex )
+            self.mainWindowInstance.UpdateSource( self.cropImg , self.mask , self.originScaleBoundaryVertex )
             self.destroy()
         else:
             messagebox.showinfo( 'Hint','請先Crop一張圖片再按Done')
