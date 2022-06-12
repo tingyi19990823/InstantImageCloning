@@ -9,7 +9,7 @@
 ### Step 2: 點選 open source image 開啟圖片
 ![image](https://github.com/tingyi19990823/InstantImageCloning/blob/master/ReadMePic/ReadMe1.jpg)
 
-### Step 3: 用右鍵選擇要貼上的區塊，並按 "Crop" 然後按 "Done"
+### Step 3: 用右鍵選擇要貼上的區塊，並按 "Crop" 然後按 "Done"。請注意選取圖片範圍時一定要逆時針方向!!
 ### 注: 中鍵可以取消選的前一個點
 ![image](https://github.com/tingyi19990823/InstantImageCloning/blob/master/ReadMePic/ReadMe2.jpg)
 ![image](https://github.com/tingyi19990823/InstantImageCloning/blob/master/ReadMePic/ReadMe3.jpg)
