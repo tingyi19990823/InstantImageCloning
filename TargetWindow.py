@@ -21,7 +21,9 @@ class TargetWindow( tk.Toplevel ):
         self.modifiedImg = None
         self.mainWindow = mainWindowInstance
         self.centerCoord = None
+        self.originCenterCoord = None
         self.draw = None
+        self.scale = 1
 
         # source info
         self.boundaryVertex = None
@@ -33,7 +35,7 @@ class TargetWindow( tk.Toplevel ):
         self.withdraw()
 
     def ClickRight( self , event ):
-        if( event.x >= 0 and event.x < self.originImg.width and event.y >= 0 and event.y < self.originImg.height ):
+        if( event.x >= 0 and event.x < self.modifiedImg.width and event.y >= 0 and event.y < self.modifiedImg.height ):
             self.setCenterCoord( event.x, event.y )
         else:
             messagebox.showinfo( 'Warning','Out of Bound: {} {} '.format( event.x , event.y ) )
@@ -43,11 +45,15 @@ class TargetWindow( tk.Toplevel ):
             modifiedPixels = self.modifiedImg.load()
             originPixels = self.originImg.load()
             oldX , oldY = self.centerCoord
+
             for i in range( oldX - 5 , oldX + 5 ):
                 for j in range( oldY - 5 , oldY + 5):
-                    if( i >= 0 and i < self.originImg.width and j >= 0 and j < self.originImg.height ):
-                        modifiedPixels[ i , j ] = originPixels[ i , j ]
+                    if( i >= 0 and i < self.modifiedImg.width and j >= 0 and j < self.modifiedImg.height ):
+                        originX = int( i / self.scale )
+                        originY = int( j / self.scale )
+                        modifiedPixels[ i , j ] = originPixels[ originX , originY ]
         self.centerCoord = ( x , y )
+        self.originCenterCoord = ( int( x / self.scale ) , int( y / self.scale ) )
         self.draw.ellipse( (x-3,y-3,x+3,y+3), fill = 'blue', outline = 'white' )
         self.UpdateImg()
 
@@ -58,10 +64,24 @@ class TargetWindow( tk.Toplevel ):
     def SetImg( self , img ):
         self.originImg = img
         self.modifiedImg = img.copy()
+
+        width = img.width
+        height = img.height
+
+        finalHeight = height
+        finalWidth = width
+        while( finalWidth > 1000 or finalHeight > 700 ):
+            self.scale -= 0.1
+            finalWidth = int(width * self.scale)
+            finalHeight = int(height * self.scale)
+        
+        self.modifiedImg = self.modifiedImg.resize( ( finalWidth , finalHeight ) )
         self.draw = ImageDraw.Draw( self.modifiedImg )
-        width = self.originImg.width + 10
-        height = self.originImg.height + 64
-        self.geometry( str(width) + 'x' + str(height) )
+
+        finalWidth = finalWidth + 10
+        finalHeight = finalHeight + 64
+        my_geometry = str(finalWidth) + 'x' + str(finalHeight)
+        self.geometry( my_geometry )
 
     def SetBoundaryVertex( self, boundaryVertex ):
         offsetRow = 0
@@ -88,19 +108,32 @@ class TargetWindow( tk.Toplevel ):
         if self.centerCoord is not None:
             for i in range( len( self.boundaryVertex ) ):
                 x , y = self.boundaryVertex[ i ]
+                x = int( x * self.scale )
+                y = int( y * self.scale )
                 x += self.centerCoord[ 0 ]
                 y += self.centerCoord[ 1 ]
                 worldCoord.append( ( x , y ) )
-                if( x < 0 or x >= self.originImg.width or y < 0 or y >= self.originImg.height ):
+                if( x < 0 or x >= self.modifiedImg.width or y < 0 or y >= self.modifiedImg.height ):
                     messagebox.showinfo( 'Warning',' out of bound ')
                     return
             self.draw.polygon( worldCoord , outline = 'red' )
         self.UpdateImg()
     
     def DoneFunc( self ):
-        img = np.array( self.modifiedImg )
-        self.mainWindow.UpdateTarget( img , self.centerCoord )
-        self.withdraw()
+        img = self.originImg
+        draw = ImageDraw.Draw( img )
+        worldCoord = []
+
+        if self.originCenterCoord is not None:
+            for i in range( len( self.boundaryVertex ) ):
+                x , y = self.boundaryVertex[ i ]
+                x += self.originCenterCoord[ 0 ]
+                y += self.originCenterCoord[ 1 ]
+                worldCoord.append( ( x , y ) )
+            draw.polygon( worldCoord , outline = 'red' )
+            img = np.array( img )
+            self.mainWindow.UpdateTarget( img , self.originCenterCoord )
+            self.withdraw()
 
     def MainLoop( self ):
         self.deiconify()
