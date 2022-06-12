@@ -112,7 +112,7 @@ class MainWindow:
             self.targetImg = self.OpenImage()
             self.targetShow = self.targetImg.copy()
             self.targetWindow = TargetWindow.init( MainWindow._instance )
-            self.targetWindow.SetImg( self.targetImg )
+            self.targetWindow.SetImg( self.targetShow )
             self.targetWindow.SetBoundaryVertex( self.sourceBoundaryVertex )
             self.targetWindow.UpdateImg()
             self.targetWindow.MainLoop()

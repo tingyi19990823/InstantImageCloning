@@ -1,3 +1,4 @@
+from builtins import breakpoint
 import numpy as np
 from PIL import Image
 import time
@@ -454,18 +455,94 @@ def SeamlessCloning( sourceImg , targetImg , targetBoundaryVertex , lambdas , di
     targetImg = np.array(targetImg, dtype=int)
     length = len(targetBoundaryVertex)
     # for idx , (height,width,weights) in enumerate( lambdas ):
-    for idx , data in enumerate( lambdas ):
-        height = int(data[0])
-        width = int(data[1])
-        weights = []
-        for i in range(length):
-            weights.append(data[ i + 2 ])
-        rX = 0
-        targetHeight , targetWidth = Source2TargetCoord( height , width , centerCoord , offset )
-        for boundaryIdx in range( len(targetBoundaryVertex) ):
-            rX += diffs[ boundaryIdx ] * weights[ boundaryIdx ]
-        intRx = np.array(rX, dtype=int)
-        targetImg[ targetHeight , targetWidth , : ] = sourceImg[height, width, :] + (intRx)
+    # for idx , data in enumerate( lambdas ):
+    #     height = int(data[0])
+    #     width = int(data[1])
+    #     weights = []
+    #     for i in range(length):
+    #         weights.append(data[ i + 2 ])
+    #     rX = 0
+    #     targetHeight , targetWidth = Source2TargetCoord( height , width , centerCoord , offset )
+    #     for boundaryIdx in range( len(targetBoundaryVertex) ):
+    #         rX += diffs[ boundaryIdx ] * weights[ boundaryIdx ]
+    #     intRx = np.array(rX, dtype=int)
+    #     targetImg[ targetHeight , targetWidth , : ] = sourceImg[height, width, :] + (intRx)
+
+    # 效能改善版本
+    print('Check lambdas[0] size', lambdas[0])
+
+    innerPointSize = len(lambdas)
+    boundaryVertexSize = length
+    dataPatchSize = len(lambdas[0])
+
+    print('Check boundaryVertexSize, dataPatchSize', boundaryVertexSize, dataPatchSize)
+
+    # 攤平
+    flattenAll = np.reshape(lambdas, (-1))
+
+    # 把所有col跟row位置抓出來
+    allHeight = np.array(flattenAll[::dataPatchSize], dtype=int)
+    allWidth = np.array(flattenAll[1::dataPatchSize], dtype=int)
+
+    # 座標轉換
+    targetHeight = np.array(allHeight - offset[0] + centerCoord[0], dtype=int)
+    targetWidth  = np.array(allWidth - offset[1] + centerCoord[1], dtype=int)
+
+    # 取出所有weight
+    getBoundaryCondition = np.ones((flattenAll.shape), dtype=bool)
+    getBoundaryCondition[::dataPatchSize] = False   # 不取出col位置資料
+    getBoundaryCondition[1::dataPatchSize] = False  # 不取出row位置資料
+    print("Check boundary condition", getBoundaryCondition[:20])
+
+    boundaryVertexWeight = flattenAll[getBoundaryCondition > 0]   # 只會有重複dataPatchSize的邊界點weights(b1w, b2w, b3w, b4w, b1w,b2w...)
+    print("Check boundaryVertexWeight", boundaryVertexWeight[:20])
+
+    # Reshape weight，讓weight變成(內部點數 * 邊界點)的形狀
+    boundaryVertexWeight = np.reshape(boundaryVertexWeight, (-1, boundaryVertexSize))
+    print('Check boundaryVertexWeight shape', boundaryVertexWeight.shape)
+
+    # 因為diffs有3個channel(RGB)，所以每個值再repeat 3次
+    boundaryVertexWeight = np.repeat(boundaryVertexWeight, 3)
+
+    # reshape成(內部點數量 * 邊界點數量 * 3)
+    boundaryVertexWeight = np.reshape(boundaryVertexWeight, (-1, boundaryVertexSize, 3))
+    print('Check boundaryVertexWeight shape after give 3 channel data', boundaryVertexWeight.shape)
+    print('CHeck boundaryVertexWeight data(3 channel)', boundaryVertexWeight[:20])
+
+    # diffs也reshape成(內部點數量 * 邊界點數量 * 3)
+    flattenDiff = np.reshape(diffs, (-1))
+    tileDiff = np.tile(flattenDiff, innerPointSize)
+
+    print('Check tileDiff shape', tileDiff.shape)
+    # print('Check tileDiff data', tileDiff[:25])
+
+    reshapeDiff = np.reshape(tileDiff, (-1, boundaryVertexSize, 3))
+    print('Check reshapeDiff shape', reshapeDiff.shape)
+    print('Check reshapeDiff data', reshapeDiff[:25])
+
+    # 相乘，得出所有的單一rX數值
+    rX = reshapeDiff * boundaryVertexWeight
+
+    print('Check rX shape', rX.shape)
+    print('Check rX value', rX[:25])
+
+    # 按照邊界點數量加起來
+    rX = np.sum(rX, axis=1, keepdims=True)
+
+    # reshape成(內部點數量 * 3)，並轉型成int
+    rX = np.reshape(rX, (-1, 3))
+    rX = np.array(rX, dtype=int)
+
+    print('CHeck after sum rX shape', rX.shape)
+    print('CHeck after sum rX', rX)
+
+
+    print('Check targetImage[targetHeight, targetWidth, :]', targetImg[targetHeight[:10], targetWidth[:10], :])
+    print('Check sourceImg[allHeight, allWidth, :]', sourceImg[:10])
+
+    print('Check targetImg and sourceImg shape', targetImg.shape, sourceImg.shape)
+
+    targetImg[targetHeight, targetWidth, :] = sourceImg[allHeight, allWidth, :] + rX
 
     targetImg[ targetImg < 0 ] = 0
     targetImg[ targetImg > 255 ] = 255
