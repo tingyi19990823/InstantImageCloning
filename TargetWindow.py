@@ -103,8 +103,17 @@ class TargetWindow( tk.Toplevel ):
         self.label.image = self.imgTK
         self.label.grid( column = 0, row = 0 )
 
+    def ResetImg(self):
+        self.modifiedImg = self.originImg.copy()
+        width = int( self.modifiedImg.width * self.scale )
+        height = int( self.modifiedImg.height * self.scale )
+        self.modifiedImg = self.modifiedImg.resize( ( width , height ) )
+
+        self.draw = ImageDraw.Draw( self.modifiedImg )
+
     def WrapImg( self ):
         worldCoord = list()
+        self.ResetImg()
         if self.centerCoord is not None:
             for i in range( len( self.boundaryVertex ) ):
                 x , y = self.boundaryVertex[ i ]
