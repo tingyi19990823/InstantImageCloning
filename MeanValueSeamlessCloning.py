@@ -78,6 +78,106 @@ def MeanValueCoordinate( mask , sourceBoundaryVertex ):
     # 算Angle & Weight
     allWeight = np.apply_along_axis(CalAngle, 1, combineColumn)
 
+
+    # 直接把CalAngle整段做效能改善(apply_along_axis沒有用，超慢ㄇㄉ)
+
+
+
+
+    # # 把col跟row分離出來
+    # col = dataPackage[0]
+    # row = dataPackage[1]
+
+    # # 把sourceBoundaryVertex分離出來
+    # sourceBoundaryVertex = dataPackage[2:]
+    # sourceBoundaryVertex = np.reshape(sourceBoundaryVertex, (-1, 2))
+
+    # Size = len( sourceBoundaryVertex )
+    # phiArray = []
+    # angles = []
+  
+    # # for idx, ( x, y ) in enumerate ( sourceBoundaryVertex ):
+    # #     phiArray.append(np.arctan2(x-col, y-row))
+
+    # # 效能改善版本(phiArray)
+    # flattenSrouceBoundaryVertex = np.reshape(sourceBoundaryVertex, -1)
+    # xMinusCol = flattenSrouceBoundaryVertex[::2] - col
+    # yMinusRow = flattenSrouceBoundaryVertex[1::2] - row
+    # phiArray = np.arctan2(yMinusRow, xMinusCol)
+
+
+    # # for idx in range(Size):
+    # #     j = (idx+1) % Size
+    # #     angles.append(phiArray[idx] - phiArray[j])
+    # # angles = np.array(angles)
+
+    # # 效能改善版本(angles)
+    # secondPhiArray = phiArray[1:]
+    # secondPhiArray = np.append(secondPhiArray, phiArray[0])
+    # angles = phiArray - secondPhiArray
+
+
+    # # 算 weights
+    # weights = np.empty((len(sourceBoundaryVertex)))
+    # lambdaI = np.empty((len(sourceBoundaryVertex)))
+    # normArray = np.empty((len(sourceBoundaryVertex)))
+    
+    # # for idx, ( x, y ) in enumerate ( sourceBoundaryVertex ):
+    # #     vec = np.array((x,y)) - np.array((col,row))
+    # #     norm = np.linalg.norm( vec )
+    # #     normArray[ idx ] = norm
+
+    # # 算weights的效能改善版本
+    # vec = np.insert(yMinusRow, np.arange(len(xMinusCol)), xMinusCol)
+    # vec = np.reshape(vec, (-1, 2))
+    # norm = np.linalg.norm(vec, axis=1)
+    # normArray = np.copy(norm)
+
+
+    # size = len(sourceBoundaryVertex)
+    
+    # tanAngles = np.tan( angles / 2 )
+    
+    
+    # # for i in range( size ):
+    # #     leftIdx = ( i ) % size
+    # #     rightIdx = ( i - 1 ) % size
+    # #     weights[ i ] = ( tanAngles[ rightIdx ] + tanAngles[ leftIdx ] ) / normArray[ i ]
+
+    # # 效能改善版本
+    # leftTanAngle = np.copy(tanAngles)
+    # rightTanAngle = np.insert(tanAngles[:-1], 0, tanAngles[-1])
+    # weights = (rightTanAngle + leftTanAngle) / normArray
+
+
+    # weightSum = np.sum(weights)
+    # lambdaI = weights / weightSum
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     # 把內部點座標與結果Weight做Concat(內部點座標, Weight)
     combineCoordAngle = np.hstack((totalCoordinate, allWeight))
 
@@ -100,34 +200,59 @@ def CalAngle( dataPackage ):
     phiArray = []
     angles = []
   
-    for idx, ( x, y ) in enumerate ( sourceBoundaryVertex ):
-        phiArray.append(np.arctan2(x-col, y-row))
+    # for idx, ( x, y ) in enumerate ( sourceBoundaryVertex ):
+    #     phiArray.append(np.arctan2(x-col, y-row))
 
-    for idx in range(Size):
-        j = (idx+1) % Size
-        angles.append(phiArray[idx] - phiArray[j])
-    angles = np.array(angles)
+    # 效能改善版本(phiArray)
+    flattenSrouceBoundaryVertex = np.reshape(sourceBoundaryVertex, -1)
+    xMinusCol = flattenSrouceBoundaryVertex[::2] - col
+    yMinusRow = flattenSrouceBoundaryVertex[1::2] - row
+    phiArray = np.arctan2(yMinusRow, xMinusCol)
+
+
+    # for idx in range(Size):
+    #     j = (idx+1) % Size
+    #     angles.append(phiArray[idx] - phiArray[j])
+    # angles = np.array(angles)
+
+    # 效能改善版本(angles)
+    secondPhiArray = phiArray[1:]
+    secondPhiArray = np.append(secondPhiArray, phiArray[0])
+    angles = phiArray - secondPhiArray
+
 
     # 算 weights
     weights = np.empty((len(sourceBoundaryVertex)))
     lambdaI = np.empty((len(sourceBoundaryVertex)))
-
     normArray = np.empty((len(sourceBoundaryVertex)))
     
-    for idx, ( x, y ) in enumerate ( sourceBoundaryVertex ):
-        vec = np.array((x,y)) - np.array((col,row))
-        norm = np.linalg.norm( vec )
-        normArray[ idx ] = norm
+    # for idx, ( x, y ) in enumerate ( sourceBoundaryVertex ):
+    #     vec = np.array((x,y)) - np.array((col,row))
+    #     norm = np.linalg.norm( vec )
+    #     normArray[ idx ] = norm
+
+    # 算weights的效能改善版本
+    vec = np.insert(yMinusRow, np.arange(len(xMinusCol)), xMinusCol)
+    vec = np.reshape(vec, (-1, 2))
+    norm = np.linalg.norm(vec, axis=1)
+    normArray = np.copy(norm)
+
 
     size = len(sourceBoundaryVertex)
     
     tanAngles = np.tan( angles / 2 )
     
     
-    for i in range( size ):
-        leftIdx = ( i ) % size
-        rightIdx = ( i - 1 ) % size
-        weights[ i ] = ( tanAngles[ rightIdx ] + tanAngles[ leftIdx ] ) / normArray[ i ]
+    # for i in range( size ):
+    #     leftIdx = ( i ) % size
+    #     rightIdx = ( i - 1 ) % size
+    #     weights[ i ] = ( tanAngles[ rightIdx ] + tanAngles[ leftIdx ] ) / normArray[ i ]
+
+    # 效能改善版本
+    leftTanAngle = np.copy(tanAngles)
+    rightTanAngle = np.insert(tanAngles[:-1], 0, tanAngles[-1])
+    weights = (rightTanAngle + leftTanAngle) / normArray
+
 
     weightSum = np.sum(weights)
     lambdaI = weights / weightSum
