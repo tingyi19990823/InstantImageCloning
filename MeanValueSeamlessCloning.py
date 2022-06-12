@@ -417,13 +417,28 @@ def CalDiff( source , target , sourceBoundaryVertex , centerCoord , offset ):
     print('cal diff along boundary')
 
     length = len( sourceBoundaryVertex )
-    diffs = np.empty( ( length , 3 ), dtype=int )
-    for idx , (col,row) in enumerate( sourceBoundaryVertex ):
+    # diffs = np.empty( ( length , 3 ), dtype=int )
+    # for idx , (col,row) in enumerate( sourceBoundaryVertex ):
         
-        targetCol , targetRow = Source2TargetCoord( col , row , centerCoord , offset )
+    #     targetCol , targetRow = Source2TargetCoord( col , row , centerCoord , offset )
         
-        diff = np.array(target[ targetCol , targetRow ], dtype=int) - np.array(source[ col , row ], dtype=int)
-        diffs[ idx ] = diff
+    #     diff = np.array(target[ targetCol , targetRow ], dtype=int) - np.array(source[ col , row ], dtype=int)
+    #     diffs[ idx ] = diff
+
+    # 效能改善
+    # 把所有col跟row位置抓出來
+    flattenBoundary = np.reshape(sourceBoundaryVertex, -1)
+    allCol = np.array(flattenBoundary[::2], dtype=int)
+    allRow = np.array(flattenBoundary[1::2], dtype=int)
+
+    # 座標轉換
+    targetCol = np.array(allCol - offset[0] + centerCoord[0], dtype=int)
+    targetRow = np.array(allRow - offset[1] + centerCoord[1], dtype=int)
+    # targetCol = np.array(allCol - offset[1] + centerCoord[1], dtype=int)
+    # targetRow = np.array(allRow - offset[0] + centerCoord[0], dtype=int)
+
+    # 算diff(3 channel)
+    diffs = np.array(target[targetCol, targetRow], dtype=int) - np.array(source[allCol, allRow], dtype=int)
 
     return diffs
 
