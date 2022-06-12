@@ -103,6 +103,7 @@ class SourceImgWindow( tk.Toplevel ):
     def PopBoundaryVertex( self ):
         if len(self.boundaryVertex) != 0 :
             coord = self.boundaryVertex.pop( len( self.boundaryVertex ) - 1 )
+            self.originScaleBoundaryVertex.pop( len( self.originScaleBoundaryVertex ) - 1 )
             x , y = coord
             pixels = self.modifiedImg.load()
             originPixels = self.originImg.load()

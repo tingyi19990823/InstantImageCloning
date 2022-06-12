@@ -122,14 +122,15 @@ class MainWindow:
     def BlendingClick( self ):
         print('Blending button clicked')
         self.resultShow = MeanValueSeamlessCloning.Start( self.sourceImg ,  self.sourcemask , self.sourceBoundaryVertex , self.targetImg , self.centerCoord )
+        self.resultImg = self.resultShow
         self.SetImg( 'result' , self.resultShow )
 
     def SaveClick( self ):
         print('Save button clicked')
-        tmp = np.array( self.resultShow )
+        tmp = np.array( self.resultImg )
         tmp = cv2.cvtColor( tmp , cv2.COLOR_RGB2BGR )
         cv2.imwrite( 'result.jpg' , tmp )
-        print('Save Done')
+        print('Save Done, resolution: ', tmp.shape )
 
     def OpenImage(self):
         filePath = filedialog.askopenfilename(
